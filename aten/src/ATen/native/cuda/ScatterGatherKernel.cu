@@ -146,6 +146,43 @@ struct _cuda_scatter_gather_internal_kernel {
       int64_t idx_dim = *(int64_t*)(index_ptr + offsets[2]);
       CUDA_KERNEL_ASSERT(idx_dim >= 0 && idx_dim < index_size
         && "index out of bounds");
+      f(
+        (scalar_t*)(self_ptr + offsets[0]),
+        is_scatter_like ? idx_dim * index_stride : 0,
+        numel,
+        (scalar_t*)(src_ptr + offsets[1]) + (is_scatter_like ? 0 : idx_dim * index_stride)
+      );
+    };
+
+    _launch_scatter_gather_kernel<num_threads(), thread_work_size()>(iter.numel(), loop);
+  }
+  void operator() (
+    TensorIterator& iter,
+    int64_t index_size,
+    int64_t index_stride,
+    int64_t numel,  // Do not use `const` qualifier here as it may cause issue in cuda 11.6.x. See #75434, #75545
+    const ReduceAdd& f
+  ) {
+    if (!iter.can_use_32bit_indexing()) {
+      for (auto& sub_iter : iter.with_32bit_indexing()) {
+        _cuda_scatter_gather_internal_kernel<is_scatter_like, scalar_t>()(
+          sub_iter, index_size, index_stride, numel, f
+        );
+      }
+      return;
+    }
+
+    char* self_ptr = (char*)iter.data_ptr(0);
+    char* src_ptr = (char*)iter.data_ptr(1);
+    char* index_ptr = (char*)iter.data_ptr(2);
+
+    auto offset_calc = make_offset_calculator<3>(iter);
+    auto loop = [=]C10_DEVICE(int i) {
+      auto offsets = offset_calc.get(i);
+
+      int64_t idx_dim = *(int64_t*)(index_ptr + offsets[2]);
+      CUDA_KERNEL_ASSERT(idx_dim >= 0 && idx_dim < index_size
+        && "index out of bounds");
 #if (defined(__gfx940__) || defined(__gfx941__) || defined(__gfx942__) || defined(__gfx950__))
       scalar_t val = *((scalar_t*)((src_ptr + offsets[1]) + (is_scatter_like ? 0 : idx_dim * index_stride)));
       scalar_t* dst = (scalar_t*)(self_ptr + offsets[0] + sizeof(scalar_t) * (is_scatter_like ? idx_dim * index_stride : 0));
