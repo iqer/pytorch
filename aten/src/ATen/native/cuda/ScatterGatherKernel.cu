@@ -149,9 +149,9 @@ struct _cuda_scatter_gather_internal_kernel {
 #if (defined(__gfx940__) || defined(__gfx941__) || defined(__gfx942__) || defined(__gfx950__))
       scalar_t val = *((scalar_t*)((src_ptr + offsets[1]) + (is_scatter_like ? 0 : idx_dim * index_stride)));
       scalar_t* dst = (scalar_t*)(self_ptr + offsets[0] + sizeof(scalar_t) * (is_scatter_like ? idx_dim * index_stride : 0));
- 
+
       int64_t idx = (is_scatter_like ? idx_dim * index_stride : 0);
- 
+
       //Try to pack coalseced bf16...
       if constexpr (std::is_same<scalar_t, c10::BFloat16>::value) //TODO: add same for fp16
       {
@@ -173,9 +173,9 @@ struct _cuda_scatter_gather_internal_kernel {
  	 		 return;
  	  }
       }
- 
+
       // not coalsced, so now let try to capture lane-matches...
- 
+
       //auto mask = __match_any_sync(__activemask(), (int64_t)dst);
       //dpp implementation of match_any()
       //TODO: is this better than above __match_any?
@@ -190,7 +190,7 @@ struct _cuda_scatter_gather_internal_kernel {
       }
       int rotv = __lane_id();
       mask = (mask << rotv) | (mask >> (64 - rotv));
- 
+
       int leader = __ffsll(mask) - 1;    // select a leader
       union punner { int l; scalar_t s; } pnr = { .s = val };
       scalar_t crnt_val = (scalar_t)0;
