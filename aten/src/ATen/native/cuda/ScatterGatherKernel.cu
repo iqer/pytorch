@@ -205,10 +205,10 @@ struct _cuda_scatter_gather_internal_kernel {
        bfvs_.bf[1] = (__hip_bfloat16)oneUpVal;
        __builtin_amdgcn_flat_atomic_fadd_v2bf16((vec_short2*)dst, bfvs_.vs2);
        return;
- 	  }
- 	  else if ((int64_t)dst - oneDnDst == 1) {
- 	 		 return;
- 	  }
+       }
+       else if ((int64_t)dst - oneDnDst == 1) {
+      		 return;
+       }
       }
 
       // not coalsced, so now let try to capture lane-matches...
