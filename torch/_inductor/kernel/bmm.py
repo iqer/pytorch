@@ -37,7 +37,9 @@ def bmm_grid(b, m, n, meta):
 
 
 def _is_large_block_for_cpu(m, n, k):
-    return m * n > 2**12
+    # Thresholds are experimentally determined to reduce Triton CPU compile times
+    if m > 128 or n > 128 or k > 128:
+        return True
 
 bmm_template = TritonTemplate(
     name="bmm",
