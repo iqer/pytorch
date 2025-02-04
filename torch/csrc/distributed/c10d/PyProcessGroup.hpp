@@ -48,11 +48,24 @@ class PyProcessGroup : public ProcessGroup {
     // transfer the ownership of work object. For user-defined work objects in
     // Python, it is necessary to keep the corresponding py::object alive in
     // addition to ensure that the user-defined methods can be executed.
-    void ref_py_object() {
+    void registered_inc_ref() override {
+      py::gil_scoped_acquire guard;
+
       py_obj_ = py::cast(this);
+      registered_refs_ += 1;
+    }
+
+    void registered_dec_ref() override {
+      py::gil_scoped_acquire guard;
+
+      registered_refs_ -= 1;
+      if (registered_refs_ == 0) {
+        py_obj_ = py::object();
+      }
     }
 
    private:
+    int64_t registered_refs_{0};
     py::object py_obj_;
   };
 

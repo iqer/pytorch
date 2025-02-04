@@ -130,6 +130,12 @@ class TORCH_API Work : public torch::CustomClassHolder {
   static c10::intrusive_ptr<Work> create_from_future(
       const c10::intrusive_ptr<c10::ivalue::Future>&);
 
+  // Hooks to notify the Work when it's registered or not. This is primarily
+  // used to support PyWork and avoid it from being deallocated by Python.
+  // Registered and unregistered may be called multiple times.
+  virtual void registered_inc_ref() {}
+  virtual void registered_dec_ref() {}
+
  protected:
   // Completes the work object and optionally sets the exception in a
   // thread-safe manner. Notifies all waiting condition variables as well.

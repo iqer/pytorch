@@ -1,4 +1,5 @@
 # Owner(s): ["module: c10d"]
+import gc
 import threading
 import unittest
 
@@ -435,22 +436,6 @@ class TestWithNCCL(MultiProcessTestCase):
         )
         self.assertEqual(torch._C._distributed_c10d._get_work_registry_size(), 1)
 
-    @skip_if_lt_x_gpu(2)
-    def test_py_work(self) -> None:
-        self._init_process_group()
-
-        wait_called = False
-
-        class MyWork(dist.Work):
-            def wait(self, _):
-                nonlocal wait_called
-                wait_called = True
-
-        tensor = torch.rand(2, 2)
-        torch._C._distributed_c10d._register_work(tensor, MyWork())
-        torch.ops._c10d_functional.wait_tensor(tensor)
-        self.assertTrue(wait_called)
-
     @unittest.skipIf(not HAS_GPU, "Inductor+gpu needs triton and recent GPU arch")
     @skip_if_lt_x_gpu(2)
     @fresh_inductor_cache()
@@ -492,6 +477,45 @@ class TestWithNCCL(MultiProcessTestCase):
         t = TestThread()
         t.start()
         t.join()
+
+
+class PyWorkTest(TestCase):
+    def test_wait_tensor(self) -> None:
+        wait_called = False
+
+        class MyWork(dist.Work):
+            def wait(self, _):
+                nonlocal wait_called
+                wait_called = True
+
+        # check registration and implicit unregistration
+
+        tensor = torch.rand(2, 2)
+        work = MyWork()
+        torch._C._distributed_c10d._register_work(tensor, work)
+
+        # Force GC collection of the MyWork object, if we're not doing correct
+        # reference counting we'll deadlock in wait_tensor.
+        del work
+        gc.collect()
+
+        torch.ops._c10d_functional.wait_tensor(tensor)
+        self.assertTrue(wait_called)
+
+    def test_ref_counting(self) -> None:
+        class MyWork(dist.Work):
+            def wait(self, _):
+                return True
+
+        a = torch.rand(2, 2)
+        b = torch.rand(2, 2)
+        work = MyWork()
+
+        torch._C._distributed_c10d._register_work(a, work)
+        torch._C._distributed_c10d._register_work(b, work)
+        torch._C._distributed_c10d._unregister_work(work)
+
+        torch.ops._c10d_functional.wait_tensor(a)
 
 
 class CompileTest(TestCase):

@@ -178,6 +178,8 @@ class WorkRegistry {
     auto storage = tensor.storage().getWeakStorageImpl();
     std::unique_lock lock(lock_);
 
+    work->registered_inc_ref();
+
     auto it = registry_.find(storage);
     if (it == registry_.end()) {
       registry_.emplace(
@@ -225,6 +227,8 @@ class WorkRegistry {
       for (const auto& _work : it->second) {
         if (_work != work) {
           nonmatching_works.push_back(_work);
+        } else {
+          work->registered_dec_ref();
         }
       }
       if (nonmatching_works.empty()) {
@@ -305,6 +309,7 @@ at::Tensor wait_tensor(const at::Tensor& tensor) {
   auto works = RankLocal<WorkRegistry>::get().pop_works(tensor);
   for (const auto& work : works) {
     work->wait();
+    work->registered_dec_ref();
   }
   return tensor;
 }

@@ -953,11 +953,16 @@ This class does not support ``__members__`` property.)");
       "_register_work",
       [](const at::Tensor& tensor,
          const c10::intrusive_ptr<::c10d::Work>& work) {
-        dynamic_cast<::c10d::PyProcessGroup::PyWork*>(work.get())
-            ->ref_py_object();
         ::c10d::register_work(tensor, work);
       },
       py::arg("tensor"),
+      py::arg("work"));
+    
+  module.def(
+      "_unregister_work",
+      [](const c10::intrusive_ptr<::c10d::Work>& work) {
+        ::c10d::unregister_work(work);
+      },
       py::arg("work"));
 
   module.def("_get_work_registry_size", []() {
