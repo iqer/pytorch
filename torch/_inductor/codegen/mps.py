@@ -16,6 +16,7 @@ from ..virtualized import ops, V
 from .common import (
     CSEVariable,
     DeferredLine,
+    DTYPE_TO_COMPUTATION_DTYPE,
     IndentedBuffer,
     OpOverrides,
     PythonPrinter,
@@ -426,6 +427,11 @@ class MetalKernel(SIMDKernel):
             """
             )
             return acc
+        if reduction_type == "sum":
+            reduction_dim = next(t for t in self.range_trees if t.is_reduction)
+            acc_buf = self._new_accvar(src_dtype, reduction_dim.numel)
+            self.body.splice(f"{acc_buf}[{reduction_dim.name}] = {value};")
+            return self.cse.generate(self.body, f"c10::metal::threadgroup_sum({acc_buf}, {reduction_dim.numel})", dtype=DTYPE_TO_COMPUTATION_DTYPE[dtype])
         raise NotImplementedError
 
     def codegen_iteration_ranges_entry(self, entry: IterationRangesEntry) -> None:
@@ -447,6 +453,8 @@ class MetalKernel(SIMDKernel):
             """,
                 strip=True,
             )
+            if self.inside_reduction:
+                code.writeline("#include <c10/metal/reduction_utils.h>")
             code.writeline("kernel void generated_kernel(")
             with code.indent():
                 for outer, inner in self.args.output_buffers.items():
